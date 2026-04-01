@@ -2,30 +2,38 @@ import os
 import httpx
 import json
 import re
-from fastapi_poe import PoeBot, run_handler
+import uvicorn
+from fastapi import FastAPI
+from fastapi_poe import PoeBot, make_app
 from fastapi_poe.types import QueryRequest
 
-# ضع رابط قوقل شيت (URL) الخاص بك هنا بين القوسين
+# 1. ضع رابط قوقل شيت (URL) الخاص بك هنا
 GOOGLE_SHEET_URL = "رابط_قوقل_شيت_الخاص_بك"
 
 class SchoolBot(PoeBot):
     async def get_response(self, request: QueryRequest):
-        # 1. تجميع نص المحادثة بالكامل
+        # تجميع نص المحادثة
         full_transcript = ""
         for message in request.query:
-            full_transcript += f"{message.role}: {message.content}\n"
+            role_name = "العميل" if message.role == "user" else "البوت"
+            full_transcript += f"{role_name}: {message.content}\n"
 
-        # 2. البحث عن الـ JSON الذي سيولده الذكاء الاصطناعي (كما برمجناه في Poe)
+        # البحث عن تحليل JSON (الذي يخرجه البوت بناءً على البرومبت)
         json_match = re.search(r'\{.*\}', full_transcript, re.DOTALL)
         
-        # تجهيز البيانات الافتراضية
+        # البيانات الأساسية التي ستُرسل للجدول
         payload = {
-            "CustomerName": "تحليل جاري...",
+            "CustomerName": "جاري الاستخراج...",
             "CustomerID": request.user_id,
+            "CustomerPhone": "غير مسجل",
+            "Summary": "محادثة جديدة",
+            "Sentiment": "محايد",
+            "Category": "استفسار",
+            "Improvement": "لا يوجد",
             "Transcript": full_transcript
         }
 
-        # إذا وجدنا تحليل JSON، نأخذ البيانات منه
+        # إذا نجح الذكاء الاصطناعي في توليد JSON، نحدث البيانات
         if json_match:
             try:
                 analysis = json.loads(json_match.group())
@@ -33,16 +41,22 @@ class SchoolBot(PoeBot):
             except:
                 pass
 
-        # 3. إرسال البيانات فوراً لجدول جوجل في الخلفية
+        # 2. إرسال البيانات لجدول جوجل (Webhook)
         try:
             async with httpx.AsyncClient() as client:
-                await client.post(GOOGLE_SHEET_URL, json=payload)
+                await client.post(GOOGLE_SHEET_URL, json=payload, timeout=10.0)
         except Exception as e:
-            print(f"Error sending to Sheets: {e}")
+            print(f"Error sending to Google Sheets: {e}")
 
-        yield self.text_event("شكراً لك، تم استلام رسالتك وتحديث سجلات المدرسة بنجاح.")
+        # الرد الذي يظهر للمستخدم في Poe
+        yield self.text_event("شكراً لتواصلك مع مدرسة الباحة. تم تسجيل ملاحظاتك وتحديث السجل تلقائياً بنجاح. هل يمكنني مساعدتك في شيء آخر؟")
+
+# 3. إعداد تشغيل السيرفر بما يتوافق مع Render و Poe
+bot = SchoolBot()
+# ملاحظة: "SCHOOL_BOT_2026" هو الـ Access Key الذي يجب أن تضعه أيضاً في صفحة Poe
+app = make_app(bot, access_key="SCHOOL_BOT_2026")
 
 if __name__ == "__main__":
-    # هذا المفتاح (Access Key) ستجده في صفحة إنشاء البوت في Poe
-    # سنضع أي كلمة الآن وسنغيرها لاحقاً إذا لزم الأمر
-    run_handler(SchoolBot(), access_key="SCHOOL_BOT_2026")
+    # Render يعطينا منفذ (Port) تلقائياً عبر متغيرات البيئة
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

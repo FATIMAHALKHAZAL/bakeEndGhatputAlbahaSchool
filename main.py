@@ -54,7 +54,7 @@ class SchoolBot(PoeBot):
 # 3. إعداد تشغيل السيرفر بما يتوافق مع Render و Poe
 bot = SchoolBot()
 # ملاحظة: "SCHOOL_BOT_2026" هو الـ Access Key الذي يجب أن تضعه أيضاً في صفحة Poe
-app = make_app(bot, access_key="SCHOOL_BOT_2026")
+app = make_app(bot, access_key="PRDdwf7hucLOqKazpSYMTjpBIpIbt82d")
 
 if __name__ == "__main__":
     # Render يعطينا منفذ (Port) تلقائياً عبر متغيرات البيئة
